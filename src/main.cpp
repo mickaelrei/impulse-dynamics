@@ -1,6 +1,5 @@
 #include <algorithm>
-#include <cmath>
-#include <iostream>
+#include <chrono>
 #include <string>
 
 #include "tmig/render/render.hpp"
@@ -12,14 +11,43 @@
 
 #include "imgui.h"
 
+#include "core/collision.hpp"
+#include "core/physics_metrics.hpp"
 #include "render/scene_renderer.hpp"
-#include "sim/sphere_layout.hpp"
+#include "sim/scenarios.hpp"
 #include "sim/timeline.hpp"
 #include "solvers/collision_solver.hpp"
 #include "solvers/global_solver.hpp"
 #include "solvers/sequential_solver.hpp"
 
 using namespace tmig;
+using Clock = std::chrono::steady_clock;
+
+struct SimMetrics {
+    float baselineEnergy = 0.f;
+    float baselineMomentum = 0.f;
+
+    void capture(const std::vector<Body>& bodies) {
+        baselineEnergy = kineticEnergy(bodies);
+        baselineMomentum = glm::length(totalMomentum(bodies));
+    }
+};
+
+static void resetScenario(
+    SimulationTimeline& timeline,
+    Scenario scenario,
+    int& objectCount,
+    SimMetrics& metrics
+) {
+    const auto& def = getScenarioDef(scenario);
+    if (!def.variableBodyCount) {
+        objectCount = static_cast<int>(def.defaultBodyCount);
+    } else {
+        objectCount = std::max(static_cast<int>(def.defaultBodyCount), objectCount);
+    }
+    timeline.reset(static_cast<size_t>(objectCount), def.setup);
+    metrics.capture(timeline.world().bodies());
+}
 
 int main() {
     render::init();
@@ -41,9 +69,11 @@ int main() {
 
     constexpr float simDt = 1.f / 60.f;
     SimulationTimeline timeline(globalSolver, simDt);
+    SimMetrics metrics;
 
-    int objectCount = 3;
-    timeline.reset(static_cast<size_t>(objectCount), defaultSphereLayout);
+    int scenarioIndex = static_cast<int>(Scenario::NewtonsCradle);
+    int objectCount = static_cast<int>(getScenarioDef(Scenario::NewtonsCradle).defaultBodyCount);
+    resetScenario(timeline, Scenario::NewtonsCradle, objectCount, metrics);
     renderer.sync(timeline.world().bodies());
 
     util::TimeStep timeStep;
@@ -54,6 +84,7 @@ int main() {
     bool applyBloom = true;
     int solverIndex = 0;
     float stepAccumulator = 0.f;
+    float renderTimeMs = 0.f;
 
     while (!render::window::shouldClose()) {
         core::input::update();
@@ -65,9 +96,6 @@ int main() {
             render::window::setTitle(title);
         }
 
-        if (isKeyPressed(core::input::Key::SPACE)) {
-            playing = !playing;
-        }
         if (isKeyPressed(core::input::Key::K)) {
             timeline.stepForward();
             renderer.sync(timeline.world().bodies());
@@ -75,6 +103,10 @@ int main() {
         if (isKeyPressed(core::input::Key::J)) {
             timeline.stepBackward();
             renderer.sync(timeline.world().bodies());
+        }
+        if (isKeyPressed(core::input::Key::ESCAPE)) {
+            render::window::setShouldClose(true);
+            continue;
         }
 
         if (playing) {
@@ -86,31 +118,55 @@ int main() {
             renderer.sync(timeline.world().bodies());
         }
 
+        const auto& currentScenario = getScenarioDef(static_cast<Scenario>(scenarioIndex));
+        const auto& bodies = timeline.world().bodies();
+        const float energy = kineticEnergy(bodies);
+        const float momentum = glm::length(totalMomentum(bodies));
+        const size_t overlaps = detectSphereCollisions(bodies).size();
+
         const auto viewport = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + 10, viewport->WorkPos.y + 10));
-        ImGui::SetNextWindowSize(ImVec2(260, 220));
+        ImGui::SetNextWindowSize(ImVec2(320, 430));
 
         ImGui::Begin("Controls", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 
         ImGui::Checkbox("Play", &playing);
         ImGui::Checkbox("Bloom", &applyBloom);
 
-        if (ImGui::InputInt("Objects", &objectCount, 1, 1)) {
-            objectCount = std::max(1, objectCount);
+        const char* scenarioNames[static_cast<int>(Scenario::Count)];
+        for (int i = 0; i < static_cast<int>(Scenario::Count); ++i) {
+            scenarioNames[i] = getScenarioDef(static_cast<Scenario>(i)).name;
+        }
+
+        if (ImGui::Combo("Scenario", &scenarioIndex, scenarioNames, static_cast<int>(Scenario::Count))) {
+            resetScenario(timeline, static_cast<Scenario>(scenarioIndex), objectCount, metrics);
+            renderer.sync(timeline.world().bodies());
+            stepAccumulator = 0.f;
+        }
+        ImGui::TextWrapped("%s", currentScenario.description);
+
+        if (currentScenario.variableBodyCount) {
+            if (ImGui::InputInt("Objects", &objectCount, 1, 1)) {
+                objectCount = std::max(2, objectCount);
+            }
+        } else {
+            ImGui::BeginDisabled();
+            ImGui::InputInt("Objects", &objectCount, 1, 1);
+            ImGui::EndDisabled();
         }
 
         if (ImGui::Button("Reset")) {
-            timeline.reset(static_cast<size_t>(objectCount), defaultSphereLayout);
+            resetScenario(timeline, static_cast<Scenario>(scenarioIndex), objectCount, metrics);
             renderer.sync(timeline.world().bodies());
             stepAccumulator = 0.f;
         }
 
-        if (ImGui::Button("Step back") || ImGui::IsKeyPressed(ImGuiKey_J)) {
+        if (ImGui::Button("Step back")) {
             timeline.stepBackward();
             renderer.sync(timeline.world().bodies());
         }
         ImGui::SameLine();
-        if (ImGui::Button("Step forward") || ImGui::IsKeyPressed(ImGuiKey_K)) {
+        if (ImGui::Button("Step forward")) {
             timeline.stepForward();
             renderer.sync(timeline.world().bodies());
         }
@@ -122,12 +178,35 @@ int main() {
             timeline.setSolver(*activeSolver);
         }
 
+        ImGui::Separator();
+        ImGui::Text("Simulation");
         ImGui::Text("Step %zu / %zu", timeline.currentStep(), timeline.maxStep());
+        ImGui::Text("Bodies: %zu", bodies.size());
+        ImGui::Text("Overlaps: %zu", overlaps);
+        ImGui::Text("Sim dt: %.4f ms", simDt * 1000.f);
+        ImGui::Text("Play acc: %.4f ms", stepAccumulator * 1000.f);
+
+        ImGui::Separator();
+        ImGui::Text("Physics");
+        ImGui::Text("Kinetic energy: %.3f", energy);
+        ImGui::Text("Energy drift: %+.3f", energy - metrics.baselineEnergy);
+        ImGui::Text("|Momentum|: %.3f", momentum);
+        ImGui::Text("Momentum drift: %+.3f", momentum - metrics.baselineMomentum);
+        ImGui::Text("Sum |v|: %.3f", totalSpeed(bodies));
+
+        ImGui::Separator();
+        ImGui::Text("Performance");
+        ImGui::Text("Frame dt: %.3f ms", timeStep.dt() * 1000.f);
+        ImGui::Text("FPS: %.1f", timeStep.fps());
+        ImGui::Text("Render: %.3f ms", renderTimeMs);
 
         ImGui::End();
 
         camController.update(camera, timeStep.dt());
+
+        const auto renderStart = Clock::now();
         renderer.render(camera, SceneRenderOptions{.applyBloom = applyBloom});
+        renderTimeMs = std::chrono::duration<float, std::milli>(Clock::now() - renderStart).count();
 
         render::ui::endFrame();
         render::window::swapBuffers();

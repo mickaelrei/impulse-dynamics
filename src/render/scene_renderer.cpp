@@ -32,7 +32,7 @@ bool SceneRenderer::init() {
 
     std::vector<util::GeneralVertex> vertices;
     std::vector<uint32_t> indices;
-    util::generateSphereMesh([&](auto v) { vertices.push_back(v); }, indices, 15);
+    util::generateSphereMesh([&](auto v) { vertices.push_back(v); }, indices, 30);
 
     vertexBuffer_ = new render::DataBuffer<util::GeneralVertex>;
     instanceBuffer_ = new render::DataBuffer<InstanceData>;
