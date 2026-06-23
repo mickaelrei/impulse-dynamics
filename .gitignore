@@ -1,5 +1,6 @@
 # --- Build (CMake) ---
 build/
+external/
 out/
 cmake-build-*/
 CMakeFiles/
