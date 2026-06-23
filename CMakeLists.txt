@@ -5,6 +5,34 @@ project(impulse-dynamics)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+find_package(Git QUIET)
+
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/tmig/CMakeLists.txt")
+    message(STATUS "TMIG submodule not found. Attempting to pull submodule...")
+
+    if(GIT_FOUND)
+        execute_process(
+            COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive --progress external/tmig
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            RESULT_VARIABLE TMIG_SUBMODULE_RESULT
+        )
+
+        if(NOT TMIG_SUBMODULE_RESULT EQUAL "0")
+            message(FATAL_ERROR
+                "Failed to pull TMIG submodule.\n"
+                "Try manually:\n"
+                "git submodule update --init --recursive"
+            )
+        endif()
+    else()
+        message(FATAL_ERROR
+            "Git not found and TMIG submodule is missing.\n"
+            "Run manually:\n"
+            "git submodule update --init --recursive"
+        )
+    endif()
+endif()
+
 add_subdirectory(external/tmig)
 
 add_executable(impulse-dynamics
