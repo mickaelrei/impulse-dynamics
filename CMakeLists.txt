@@ -43,6 +43,7 @@ add_executable(impulse-dynamics
     src/sim/timeline.cpp
     src/sim/scenarios.cpp
     src/solvers/global_solver.cpp
+    src/solvers/iterative_solver.cpp
     src/solvers/sequential_solver.cpp
 )
 

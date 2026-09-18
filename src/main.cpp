@@ -18,6 +18,7 @@
 #include "sim/timeline.hpp"
 #include "solvers/collision_solver.hpp"
 #include "solvers/global_solver.hpp"
+#include "solvers/iterative_solver.hpp"
 #include "solvers/sequential_solver.hpp"
 
 using namespace tmig;
@@ -64,6 +65,7 @@ int main() {
     }
 
     GlobalImpulseSolver globalSolver;
+    IterativeSolver iterativeSolver;
     SequentialSolver sequentialSolver;
     CollisionSolver* activeSolver = &globalSolver;
 
@@ -86,6 +88,7 @@ int main() {
     float stepAccumulator = 0.f;
     float renderTimeMs = 0.f;
 
+    render::setClearColor(glm::vec4{0.7f, 0.7f, 0.7f, 1.f});
     while (!render::window::shouldClose()) {
         core::input::update();
         render::ui::beginFrame();
@@ -171,11 +174,27 @@ int main() {
             renderer.sync(timeline.world().bodies());
         }
 
-        const char* solverNames[] = {"Global", "Sequential"};
-        if (ImGui::Combo("Solver", &solverIndex, solverNames, 2)) {
-            activeSolver = solverIndex == 0 ? static_cast<CollisionSolver*>(&globalSolver)
-                                            : static_cast<CollisionSolver*>(&sequentialSolver);
+        const char* solverNames[] = {
+            "Global Direto (Gauss-Jordan)",
+            "Global Iterativo (Gauss-Seidel)",
+            "Sequencial (Local)"
+        };
+        if (ImGui::Combo("Solver", &solverIndex, solverNames, 3)) {
+            if (solverIndex == 0) {
+                activeSolver = &globalSolver;
+            } else if (solverIndex == 1) {
+                activeSolver = &iterativeSolver;
+            } else {
+                activeSolver = &sequentialSolver;
+            }
             timeline.setSolver(*activeSolver);
+        }
+
+        if (solverIndex == 1) {
+            int iters = static_cast<int>(iterativeSolver.maxIterations());
+            if (ImGui::SliderInt("Iterações GS", &iters, 1, 100)) {
+                iterativeSolver.setMaxIterations(static_cast<size_t>(iters));
+            }
         }
 
         ImGui::Separator();

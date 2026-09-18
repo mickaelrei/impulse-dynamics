@@ -1,3 +1,5 @@
+#pragma once
+
 #include <vector>
 #include <algorithm>
 
@@ -10,15 +12,26 @@
 
 using linalg::Matrix;
 
-Matrix<float> resolveSimultaneousCollisions3D(
+enum class LinearSolverMethod {
+    GaussJordan,
+    GaussSeidel
+};
+
+inline Matrix<float> resolveSimultaneousCollisions3D(
     const std::vector<glm::vec3> &global_pos,
     const std::vector<glm::vec3> &global_vel,
     const std::vector<float> &global_mass,
     const std::vector<std::pair<size_t, size_t>> &colliding_pairs,
-    float e = 1.0f
+    float e = 1.0f,
+    LinearSolverMethod method = LinearSolverMethod::GaussJordan,
+    size_t maxIter = 100,
+    float tol = 1e-5f
 ) {
     size_t N = global_mass.size();
     size_t K = colliding_pairs.size();
+    if (K == 0 || N == 0) {
+        return Matrix<float>(3 * N, 1, 0.0f);
+    }
     size_t threeN = 3 * N;
 
     Matrix<float> v(threeN, 1, 0.0f);
@@ -60,22 +73,13 @@ Matrix<float> resolveSimultaneousCollisions3D(
 
     auto b_vec = uImp * -(1.0f + e);
 
-    // Gauss-Seidel
-    // Vale checar `result.converged` se a estabilidade virar problema
-    // auto result = linalg::solveGaussSeidel(A, b_vec, 1e-5f, 100);
-    // Matrix<float> J = result.x;
-
-    // Gauss-Jordan
-    Matrix<float> J = linalg::solveGaussJordan(A, b_vec);
-
-    // Particionado por bloco
-    // size_t k_split = K / 2;
-    // Matrix<float> J = linalg::solveBlockPartition(A, b_vec, k_split);
-
-    // Truncar impulsos negativos
-    // for (size_t i = 0; i < J.rows(); ++i) {
-    //     J(i, 0) = std::max(0.0f, J(i, 0));
-    // }
+    Matrix<float> J;
+    if (method == LinearSolverMethod::GaussJordan) {
+        J = linalg::solveGaussJordan(A, b_vec);
+    } else {
+        auto result = linalg::solveGaussSeidel(A, b_vec, tol, maxIter);
+        J = result.x;
+    }
 
     return invM * Z * J;
 }
