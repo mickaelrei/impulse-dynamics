@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <chrono>
+#include <span>
 #include <string>
 
 #include "tmig/render/render.hpp"
@@ -12,6 +13,7 @@
 #include "imgui.h"
 
 #include "core/collision.hpp"
+#include "core/plane.hpp"
 #include "core/physics_metrics.hpp"
 #include "render/scene_renderer.hpp"
 #include "sim/scenarios.hpp"
@@ -47,6 +49,7 @@ static void resetScenario(
         objectCount = std::max(static_cast<int>(def.defaultBodyCount), objectCount);
     }
     timeline.reset(static_cast<size_t>(objectCount), def.setup);
+    def.configureWorld(timeline.world());
     metrics.capture(timeline.world().bodies());
 }
 
@@ -76,7 +79,7 @@ int main() {
     int scenarioIndex = static_cast<int>(Scenario::NewtonsCradle);
     int objectCount = static_cast<int>(getScenarioDef(Scenario::NewtonsCradle).defaultBodyCount);
     resetScenario(timeline, Scenario::NewtonsCradle, objectCount, metrics);
-    renderer.sync(timeline.world().bodies());
+    renderer.sync(timeline.world().bodies(), timeline.world().planes());
 
     util::TimeStep timeStep;
     util::SmoothFirstPersonCameraController camController;
@@ -84,6 +87,7 @@ int main() {
 
     bool playing = false;
     bool applyBloom = true;
+    bool penetrationCorrection = true;
     int solverIndex = 0;
     float stepAccumulator = 0.f;
     float renderTimeMs = 0.f;
@@ -101,11 +105,11 @@ int main() {
 
         if (isKeyPressed(core::input::Key::K)) {
             timeline.stepForward();
-            renderer.sync(timeline.world().bodies());
+            renderer.sync(timeline.world().bodies(), timeline.world().planes());
         }
         if (isKeyPressed(core::input::Key::J)) {
             timeline.stepBackward();
-            renderer.sync(timeline.world().bodies());
+            renderer.sync(timeline.world().bodies(), timeline.world().planes());
         }
         if (isKeyPressed(core::input::Key::ESCAPE)) {
             render::window::setShouldClose(true);
@@ -118,18 +122,23 @@ int main() {
                 timeline.stepForward();
                 stepAccumulator -= simDt;
             }
-            renderer.sync(timeline.world().bodies());
+            renderer.sync(timeline.world().bodies(), timeline.world().planes());
         }
 
         const auto& currentScenario = getScenarioDef(static_cast<Scenario>(scenarioIndex));
         const auto& bodies = timeline.world().bodies();
         const float energy = kineticEnergy(bodies);
         const float momentum = glm::length(totalMomentum(bodies));
-        const size_t overlaps = detectSphereCollisions(bodies).size();
+        const size_t overlaps = detectSphereContacts(std::span<const Body>(bodies)).size();
+        const World& world = timeline.world();
+        const size_t planeContacts = detectSpherePlaneContacts(
+            std::span<const Body>(bodies),
+            std::span<const Plane>(world.planes())
+        ).size();
 
         const auto viewport = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + 10, viewport->WorkPos.y + 10));
-        ImGui::SetNextWindowSize(ImVec2(320, 430));
+        ImGui::SetNextWindowSize(ImVec2(320, 520));
 
         ImGui::Begin("Controls", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 
@@ -143,7 +152,7 @@ int main() {
 
         if (ImGui::Combo("Scenario", &scenarioIndex, scenarioNames, static_cast<int>(Scenario::Count))) {
             resetScenario(timeline, static_cast<Scenario>(scenarioIndex), objectCount, metrics);
-            renderer.sync(timeline.world().bodies());
+            renderer.sync(timeline.world().bodies(), timeline.world().planes());
             stepAccumulator = 0.f;
         }
         ImGui::TextWrapped("%s", currentScenario.description);
@@ -160,18 +169,18 @@ int main() {
 
         if (ImGui::Button("Reset")) {
             resetScenario(timeline, static_cast<Scenario>(scenarioIndex), objectCount, metrics);
-            renderer.sync(timeline.world().bodies());
+            renderer.sync(timeline.world().bodies(), timeline.world().planes());
             stepAccumulator = 0.f;
         }
 
         if (ImGui::Button("Step back")) {
             timeline.stepBackward();
-            renderer.sync(timeline.world().bodies());
+            renderer.sync(timeline.world().bodies(), timeline.world().planes());
         }
         ImGui::SameLine();
         if (ImGui::Button("Step forward")) {
             timeline.stepForward();
-            renderer.sync(timeline.world().bodies());
+            renderer.sync(timeline.world().bodies(), timeline.world().planes());
         }
 
         const char* solverNames[] = {
@@ -197,11 +206,21 @@ int main() {
             }
         }
 
+        timeline.world().setPenetrationCorrectionEnabled(penetrationCorrection);
+        ImGui::Checkbox("Correção de penetração", &penetrationCorrection);
+
+        bool gravityEnabled = timeline.world().gravityEnabled();
+        if (ImGui::Checkbox("Gravidade", &gravityEnabled)) {
+            timeline.world().setGravityEnabled(gravityEnabled);
+        }
+
         ImGui::Separator();
         ImGui::Text("Simulation");
         ImGui::Text("Step %zu / %zu", timeline.currentStep(), timeline.maxStep());
         ImGui::Text("Bodies: %zu", bodies.size());
         ImGui::Text("Overlaps: %zu", overlaps);
+        ImGui::Text("Plane contacts: %zu", planeContacts);
+        ImGui::Text("Planes: %zu", world.planes().size());
         ImGui::Text("Sim dt: %.4f ms", simDt * 1000.f);
         ImGui::Text("Play acc: %.4f ms", stepAccumulator * 1000.f);
 

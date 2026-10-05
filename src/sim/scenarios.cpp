@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "sim/world.hpp"
+
 namespace {
 
 constexpr glm::vec4 kDefaultColor{0.7f, 0.7f, 0.9f, 1.f};
@@ -125,6 +127,39 @@ void setupSimultaneousHit(std::vector<Body>& bodies) {
     );
 }
 
+void configureWorldFreeFlight(World& world) {
+    world.clearPlanes();
+    world.setGravityEnabled(false);
+}
+
+void configureWorldFloor(World& world) {
+    world.clearPlanes();
+    world.addPlane(makePlane(glm::vec3{0.f, 1.f, 0.f}, glm::vec3{0.f, -10.f, 0.f}, 0.85f));
+    world.setGravity(glm::vec3{0.f, -18.f, 0.f});
+    world.setGravityEnabled(true);
+}
+
+void setupBallsOverFloor(std::vector<Body>& bodies) {
+    if (bodies.size() < 3) {
+        bodies.resize(3);
+    }
+
+    constexpr float radius = 2.5f;
+    constexpr float mass = 2.f;
+
+    for (size_t i = 0; i < bodies.size(); ++i) {
+        const float x = (static_cast<float>(i) - static_cast<float>(bodies.size() - 1) * 0.5f) * 6.f;
+        const float y = 2.f + static_cast<float>(i % 3) * 5.f;
+        bodies[i] = makeBody(
+            glm::vec3{x, y, 0.f},
+            glm::vec3{0.f},
+            mass,
+            radius,
+            i % 2 == 0 ? kAccentColor : kSecondaryColor
+        );
+    }
+}
+
 void setupDoubleEndedHit(std::vector<Body>& bodies) {
     bodies.resize(4);
 
@@ -145,27 +180,32 @@ const ScenarioDef& getScenarioDef(Scenario scenario) {
         {
             "Head-on collision",
             "Two equal balls approach on the X axis and collide.",
-            2, false, setupHeadOnCollision,
+            2, false, setupHeadOnCollision, configureWorldFreeFlight,
         },
         {
             "Newton's cradle",
             "N balls in a row; the first is pulled back and launched into the chain.",
-            5, true, setupNewtonsCradle,
+            5, true, setupNewtonsCradle, configureWorldFreeFlight,
         },
         {
             "Unequal mass",
             "A light ball hits a heavier ball at rest.",
-            2, false, setupUnequalMass,
+            2, false, setupUnequalMass, configureWorldFreeFlight,
         },
         {
             "Simultaneous hit",
             "Two balls collide with a stationary center ball at the same time.",
-            3, false, setupSimultaneousHit,
+            3, false, setupSimultaneousHit, configureWorldFreeFlight,
         },
         {
             "Double-ended hit",
             "Four touching balls; outer balls move inward simultaneously.",
-            4, false, setupDoubleEndedHit,
+            4, false, setupDoubleEndedHit, configureWorldFreeFlight,
+        },
+        {
+            "Balls over floor",
+            "Spheres fall under gravity onto an infinite horizontal plane at y = -10.",
+            5, true, setupBallsOverFloor, configureWorldFloor,
         },
     };
 

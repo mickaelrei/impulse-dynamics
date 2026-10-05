@@ -6,12 +6,15 @@
 
 #include "core/body.hpp"
 
+class World;
+
 enum class Scenario : int {
     HeadOnCollision = 0,
     NewtonsCradle,
     UnequalMass,
     SimultaneousHit,
     DoubleEndedHit,
+    BallsOverFloor,
     Count
 };
 
@@ -21,6 +24,7 @@ struct ScenarioDef {
     size_t defaultBodyCount;
     bool variableBodyCount;
     std::function<void(std::vector<Body>&)> setup;
+    std::function<void(World&)> configureWorld;
 };
 
 const ScenarioDef& getScenarioDef(Scenario scenario);
@@ -31,3 +35,7 @@ void setupNewtonsCradle(std::vector<Body>& bodies);
 void setupUnequalMass(std::vector<Body>& bodies);
 void setupSimultaneousHit(std::vector<Body>& bodies);
 void setupDoubleEndedHit(std::vector<Body>& bodies);
+void setupBallsOverFloor(std::vector<Body>& bodies);
+
+void configureWorldFreeFlight(World& world);
+void configureWorldFloor(World& world);
