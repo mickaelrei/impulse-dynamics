@@ -237,6 +237,8 @@ int main() {
         ImGui::Text("Frame dt: %.3f ms", timeStep.dt() * 1000.f);
         ImGui::Text("FPS: %.1f", timeStep.fps());
         ImGui::Text("Render: %.3f ms", renderTimeMs);
+        ImGui::Text("Physics step: %.3f ms (last)", timeline.lastPhysicsStepMs());
+        ImGui::Text("Physics step: %.3f ms (avg)", timeline.averagePhysicsStepMs());
 
         ImGui::End();
 

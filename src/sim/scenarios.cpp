@@ -160,6 +160,31 @@ void setupBallsOverFloor(std::vector<Body>& bodies) {
     }
 }
 
+void setupVerticalStack(std::vector<Body>& bodies) {
+    if (bodies.size() < 3) {
+        bodies.resize(4);
+    }
+
+    constexpr float radius = 2.f;
+    constexpr float mass = 2.f;
+    constexpr float floorY = -10.f;
+    const float baseCenterY = floorY + radius;
+
+    for (size_t i = 0; i < bodies.size(); ++i) {
+        const float y = baseCenterY + static_cast<float>(i) * (2.f * radius);
+        bodies[i] = makeBody(
+            glm::vec3{0.f, y, 0.f},
+            glm::vec3{0.f},
+            mass,
+            radius,
+            kDefaultColor
+        );
+    }
+
+    bodies.front().velocity.y = -6.f;
+    bodies.front().color = kAccentColor;
+}
+
 void setupDoubleEndedHit(std::vector<Body>& bodies) {
     bodies.resize(4);
 
@@ -206,6 +231,11 @@ const ScenarioDef& getScenarioDef(Scenario scenario) {
             "Balls over floor",
             "Spheres fall under gravity onto an infinite horizontal plane at y = -10.",
             5, true, setupBallsOverFloor, configureWorldFloor,
+        },
+        {
+            "Vertical stack",
+            "Stacked spheres on a floor; top sphere given downward velocity.",
+            4, true, setupVerticalStack, configureWorldFloor,
         },
     };
 

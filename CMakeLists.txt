@@ -35,17 +35,31 @@ endif()
 
 add_subdirectory(external/tmig)
 
-add_executable(impulse-dynamics
-    src/main.cpp
-    src/render/scene_renderer.cpp
+find_package(glm REQUIRED)
+
+set(PHYSICS_LIB_SOURCES
     src/sim/world.cpp
-    src/sim/snapshot.cpp
-    src/sim/timeline.cpp
     src/sim/scenarios.cpp
     src/solvers/global_solver.cpp
     src/solvers/iterative_solver.cpp
     src/solvers/sequential_solver.cpp
 )
+
+add_executable(impulse-dynamics
+    src/main.cpp
+    src/render/scene_renderer.cpp
+    src/sim/snapshot.cpp
+    src/sim/timeline.cpp
+    ${PHYSICS_LIB_SOURCES}
+)
+
+add_executable(physics-scenarios-bench
+    src/bench/physics_scenarios_bench.cpp
+    src/bench/bench_layouts.cpp
+    ${PHYSICS_LIB_SOURCES}
+)
+target_include_directories(physics-scenarios-bench PRIVATE include)
+target_link_libraries(physics-scenarios-bench PRIVATE glm::glm)
 
 set(CMAKE_BUILD_TYPE Release)
 target_include_directories(impulse-dynamics PRIVATE include)

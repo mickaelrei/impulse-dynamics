@@ -28,6 +28,9 @@ public:
 
     float dt() const { return dt_; }
 
+    float lastPhysicsStepMs() const { return lastPhysicsStepMs_; }
+    float averagePhysicsStepMs() const { return averagePhysicsStepMs_; }
+
 private:
     void restore(size_t index);
 
@@ -36,4 +39,7 @@ private:
     float dt_;
     std::vector<SimulationSnapshot> history_;
     size_t cursor_ = 0;
+    float lastPhysicsStepMs_ = 0.f;
+    float averagePhysicsStepMs_ = 0.f;
+    size_t physicsStepSamples_ = 0;
 };

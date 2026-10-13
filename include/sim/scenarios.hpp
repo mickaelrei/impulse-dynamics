@@ -15,6 +15,7 @@ enum class Scenario : int {
     SimultaneousHit,
     DoubleEndedHit,
     BallsOverFloor,
+    VerticalStack,
     Count
 };
 
@@ -36,6 +37,7 @@ void setupUnequalMass(std::vector<Body>& bodies);
 void setupSimultaneousHit(std::vector<Body>& bodies);
 void setupDoubleEndedHit(std::vector<Body>& bodies);
 void setupBallsOverFloor(std::vector<Body>& bodies);
+void setupVerticalStack(std::vector<Body>& bodies);
 
 void configureWorldFreeFlight(World& world);
 void configureWorldFloor(World& world);
